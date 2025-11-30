@@ -1,0 +1,8 @@
+{
+  "name": "Fewtalks - AI Tweet Generator",
+  "description": "An application that transforms long-form text like blog posts, idea notes, and summaries into multiple high-quality, viral-ready tweets using AI.",
+  "requestFramePermissions": [
+    "microphone",
+    "geolocation"
+  ]
+}
