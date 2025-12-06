@@ -2,6 +2,7 @@
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
 import { User } from '../types';
 import * as authService from '../services/authService';
+import { sendLoginNotification } from '../services/emailService';
 import { trackSignIn, trackSignOut } from '../utils/analytics';
 
 interface AuthContextType {
@@ -15,6 +16,9 @@ interface AuthContextType {
   isUpgradeModalOpen: boolean;
   openUpgradeModal: () => void;
   closeUpgradeModal: () => void;
+  isContactModalOpen: boolean;
+  openContactModal: () => void;
+  closeContactModal: () => void;
   upgradeToPro: () => void;
 }
 
@@ -29,6 +33,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+  const [isContactModalOpen, setIsContactModalOpen] = useState(false);
 
   useEffect(() => {
     const persistedUser = authService.getCurrentUser();
@@ -43,6 +48,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   
   const openUpgradeModal = () => setIsUpgradeModalOpen(true);
   const closeUpgradeModal = () => setIsUpgradeModalOpen(false);
+  
+  const openContactModal = () => setIsContactModalOpen(true);
+  const closeContactModal = () => setIsContactModalOpen(false);
 
   const signIn = async () => {
     try {
@@ -51,14 +59,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       trackSignIn('google');
       closeLoginModal();
       
-      // Send login notification email
-      try {
-        const { sendLoginNotification } = await import('../services/emailService');
-        await sendLoginNotification(loggedInUser);
-      } catch (emailError) {
+      // Send login notification email (non-blocking)
+      sendLoginNotification(loggedInUser).catch((emailError) => {
         // Don't fail login if email fails
         console.error('Failed to send login email:', emailError);
-      }
+      });
     } catch (error: any) {
       console.error("Sign in failed:", error);
       setUser(null);
@@ -83,7 +88,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const value = { user, loading, signIn, signOut, isLoginModalOpen, openLoginModal, closeLoginModal, isUpgradeModalOpen, openUpgradeModal, closeUpgradeModal, upgradeToPro };
+  const value = { user, loading, signIn, signOut, isLoginModalOpen, openLoginModal, closeLoginModal, isUpgradeModalOpen, openUpgradeModal, closeUpgradeModal, isContactModalOpen, openContactModal, closeContactModal, upgradeToPro };
 
   return (
     <AuthContext.Provider value={value}>

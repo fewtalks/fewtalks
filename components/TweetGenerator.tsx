@@ -285,9 +285,20 @@ Paid plan: Unlimited generations + advanced features (hashtags, thread drafts, N
 
         <div className="flex-grow overflow-hidden flex flex-col">
           {isNewsLoading ? (
-            <div className="flex flex-col items-center justify-center h-full text-slate-500 dark:text-slate-400">
-              <LoadingSpinner />
-              <p className="mt-2 font-semibold">Fetching headlines for "{currentNewsQuery}"...</p>
+            <div className="flex flex-col h-full">
+              <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded-md w-3/4 mb-3 animate-pulse shrink-0"></div>
+              <div className="overflow-y-auto pr-2">
+                <ul className="space-y-2">
+                  {[...Array(8)].map((_, index) => (
+                    <li key={index}>
+                      <div className="w-full p-3 rounded-lg bg-slate-200 dark:bg-slate-700/50 animate-pulse">
+                        <div className="h-4 bg-slate-300 dark:bg-slate-600 rounded w-full mb-2"></div>
+                        <div className="h-4 bg-slate-300 dark:bg-slate-600 rounded w-5/6"></div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
           ) : newsHeadlines.length > 0 ? (
             <>
@@ -417,27 +428,60 @@ Paid plan: Unlimited generations + advanced features (hashtags, thread drafts, N
                     </div>
                 </div>
 
-                <div className="flex flex-col gap-3">
-                    <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors">
-                        <input
-                            type="checkbox"
-                            checked={includeHashtags}
-                            onChange={(e) => setIncludeHashtags(e.target.checked)}
+                <div className="flex flex-col gap-4">
+                    {/* Hashtags Toggle */}
+                    <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-brand-primary/50 dark:hover:border-brand-primary/50 transition-colors">
+                        <div className="flex flex-col">
+                            <span className="text-sm font-semibold text-slate-900 dark:text-white">Include relevant hashtags</span>
+                            <span className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Add trending hashtags to your tweets</span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => !isLoading && setIncludeHashtags(!includeHashtags)}
                             disabled={isLoading}
-                             className="h-4 w-4 rounded border-slate-400 dark:border-slate-600 bg-slate-200 dark:bg-slate-700 text-brand-primary focus:ring-brand-primary"
-                        />
-                        <span className="text-sm font-medium">Include relevant hashtags</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors">
-                        <input 
-                            type="checkbox"
-                            checked={includeImage}
-                            onChange={(e) => setIncludeImage(e.target.checked)}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                                includeHashtags 
+                                    ? 'bg-brand-primary' 
+                                    : 'bg-slate-300 dark:bg-slate-600'
+                            }`}
+                            role="switch"
+                            aria-checked={includeHashtags}
+                            aria-label="Include relevant hashtags"
+                        >
+                            <span
+                                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                    includeHashtags ? 'translate-x-6' : 'translate-x-1'
+                                }`}
+                            />
+                        </button>
+                    </div>
+
+                    {/* Generated Image Toggle */}
+                    <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-brand-primary/50 dark:hover:border-brand-primary/50 transition-colors">
+                        <div className="flex flex-col">
+                            <span className="text-sm font-semibold text-slate-900 dark:text-white">Include a generated image</span>
+                            <span className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Create AI-generated images for your tweets</span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => !isLoading && setIncludeImage(!includeImage)}
                             disabled={isLoading}
-                            className="h-4 w-4 rounded border-slate-400 dark:border-slate-600 bg-slate-200 dark:bg-slate-700 text-brand-primary focus:ring-brand-primary"
-                        />
-                        <span className="text-sm font-medium">Include a generated image</span>
-                    </label>
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                                includeImage 
+                                    ? 'bg-brand-primary' 
+                                    : 'bg-slate-300 dark:bg-slate-600'
+                            }`}
+                            role="switch"
+                            aria-checked={includeImage}
+                            aria-label="Include a generated image"
+                        >
+                            <span
+                                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                    includeImage ? 'translate-x-6' : 'translate-x-1'
+                                }`}
+                            />
+                        </button>
+                    </div>
                 </div>
           </div>
 
@@ -491,7 +535,7 @@ Paid plan: Unlimited generations + advanced features (hashtags, thread drafts, N
 
         {/* Output Section */}
         <div className="flex flex-col">
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">2. Get Your Content</h2>
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">2. 💥 Ride Google Trends — Create Viral Magic!</h2>
           <div className="bg-slate-100 dark:bg-slate-800 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg p-4 flex-grow min-h-[300px] flex flex-col">
             {error && !isNewsLoading && <div className="text-red-500 dark:text-red-400 bg-red-100 dark:bg-red-900/50 p-3 rounded-lg mb-4 shrink-0">{error}</div>}
             

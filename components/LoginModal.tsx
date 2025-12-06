@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { GoogleIcon } from './icons/GoogleIcon';
+import { initializeGoogleSignIn } from '../services/authService';
 
 // Detect if device is iOS
 const isIOS = (): boolean => {
@@ -16,52 +17,72 @@ const LoginModal: React.FC = () => {
   const buttonRenderedRef = useRef(false);
 
   useEffect(() => {
-    if (isLoginModalOpen && googleButtonRef.current && !buttonRenderedRef.current) {
-      const clientId = process.env.GOOGLE_CLIENT_ID;
-      if (clientId && window.google?.accounts?.id) {
-        try {
-          // Clear any existing button
-          googleButtonRef.current.innerHTML = '';
+    // Initialize Google Sign-In when modal opens
+    if (isLoginModalOpen) {
+      const checkAndInit = () => {
+        if (window.google?.accounts?.id) {
+          initializeGoogleSignIn();
           
-          window.google.accounts.id.renderButton(googleButtonRef.current, {
-            type: 'standard',
-            theme: 'outline',
-            size: 'large',
-            text: 'signin_with',
-            width: '100%',
-            locale: 'en',
-          });
-
-          // Set up the callback for iOS compatibility
-          window.google.accounts.id.initialize({
-            client_id: clientId,
-            callback: async (response: { credential: string }) => {
-              if (response?.credential) {
-                setError(null);
-                setIsLoading(true);
-                try {
-                  await signIn();
-                } catch (err: any) {
-                  setError(err?.message || 'Sign in failed. Please try again.');
-                } finally {
-                  setIsLoading(false);
-                }
-              }
-            },
-            error_callback: (error: any) => {
-              console.error('Google sign-in error:', error);
-              setError('Sign in failed. Please try again.');
-              setIsLoading(false);
-            },
-          });
-
-          buttonRenderedRef.current = true;
-        } catch (err) {
-          console.error('Failed to render Google button:', err);
+          // Try to render Google button for non-iOS devices
+          if (!isIOS() && googleButtonRef.current && !buttonRenderedRef.current) {
+            try {
+              googleButtonRef.current.innerHTML = '';
+              window.google.accounts.id.renderButton(googleButtonRef.current, {
+                type: 'standard',
+                theme: 'outline',
+                size: 'large',
+                text: 'signin_with',
+                locale: 'en',
+              });
+              buttonRenderedRef.current = true;
+            } catch (err) {
+              console.error('Failed to render Google button:', err);
+            }
+          }
+        } else {
+          // Retry if Google hasn't loaded yet
+          setTimeout(checkAndInit, 100);
         }
-      }
+      };
+      
+      checkAndInit();
+      
+      // Listen for Google sign-in events (for rendered button flow)
+      const handleSignInSuccess = async (event: any) => {
+        const user = event.detail.user;
+        if (user) {
+          setIsLoading(true);
+          try {
+            // The user is already stored in localStorage by the callback
+            // Just trigger the signIn flow to update the context and send email
+            // But first check if user exists in localStorage to avoid duplicate sign-in
+            const storedUser = JSON.parse(localStorage.getItem('fewtalks_user') || 'null');
+            if (storedUser && storedUser.email === user.email) {
+              // User is already signed in, just call signIn to update context
+              await signIn();
+            }
+            setIsLoading(false);
+          } catch (err: any) {
+            setError(err?.message || 'Sign in failed. Please try again.');
+            setIsLoading(false);
+          }
+        }
+      };
+      
+      const handleSignInError = (event: any) => {
+        setError(event.detail.error || 'Sign in failed. Please try again.');
+        setIsLoading(false);
+      };
+      
+      window.addEventListener('googleSignInSuccess', handleSignInSuccess);
+      window.addEventListener('googleSignInError', handleSignInError);
+      
+      return () => {
+        window.removeEventListener('googleSignInSuccess', handleSignInSuccess);
+        window.removeEventListener('googleSignInError', handleSignInError);
+      };
     }
-
+    
     // Reset when modal closes
     if (!isLoginModalOpen) {
       buttonRenderedRef.current = false;
@@ -79,10 +100,31 @@ const LoginModal: React.FC = () => {
     setError(null);
     setIsLoading(true);
     try {
-      await signIn();
+      // Ensure Google is initialized
+      if (!window.google?.accounts?.id) {
+        throw new Error('Google sign-in is not available. Please refresh the page.');
+      }
+      
+      initializeGoogleSignIn();
+      
+      // Start the sign-in process (this sets up the promise)
+      const signInPromise = signIn();
+      
+      // Trigger the Google sign-in prompt
+      // This will show the One Tap UI or trigger the callback if user was already signed in
+      try {
+        window.google.accounts.id.prompt();
+      } catch (promptError) {
+        // If prompt fails (e.g., was dismissed), the button click should still work
+        // The rendered button or OAuth flow will handle it
+        console.log('One Tap prompt not available, using alternative flow');
+      }
+      
+      // Wait for sign-in to complete
+      await signInPromise;
+      setIsLoading(false);
     } catch (err: any) {
       setError(err?.message || 'Sign in failed. Please try again.');
-    } finally {
       setIsLoading(false);
     }
   };
@@ -123,18 +165,8 @@ const LoginModal: React.FC = () => {
 
         {/* Google Sign-In Button Container */}
         <div className="w-full mb-4">
-          {isIOS() ? (
-            // For iOS, use custom button that triggers the sign-in flow
-            <button
-              onClick={handleButtonClick}
-              disabled={isLoading}
-              className="w-full inline-flex items-center justify-center gap-3 bg-white text-slate-800 font-bold px-6 py-3 rounded-lg hover:bg-slate-200 active:bg-slate-300 transition-colors border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation min-h-[48px]"
-            >
-              <GoogleIcon />
-              {isLoading ? 'Signing in...' : 'Sign in with Google'}
-            </button>
-          ) : (
-            // For other devices, try to use Google's rendered button
+          {!isIOS() && window.google?.accounts?.id ? (
+            // Use Google's rendered button for non-iOS devices
             <div ref={googleButtonRef} className="w-full flex justify-center">
               {!buttonRenderedRef.current && (
                 <button
@@ -147,6 +179,16 @@ const LoginModal: React.FC = () => {
                 </button>
               )}
             </div>
+          ) : (
+            // Use custom button for iOS or fallback
+            <button
+              onClick={handleButtonClick}
+              disabled={isLoading}
+              className="w-full inline-flex items-center justify-center gap-3 bg-white text-slate-800 font-bold px-6 py-3 rounded-lg hover:bg-slate-200 active:bg-slate-300 transition-colors border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation min-h-[48px]"
+            >
+              <GoogleIcon />
+              {isLoading ? 'Signing in...' : 'Sign in with Google'}
+            </button>
           )}
         </div>
 

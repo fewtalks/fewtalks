@@ -37,8 +37,8 @@ Use the included PHP endpoint (`api/send-login-notification.php`) with Gmail SMT
 2. Upload the `api` folder to your web server
 3. Set in `.env.local`:
    ```env
-   EMAIL_SERVICE_URL=https://yourdomain.com/api/send-login-notification.php
-   ADMIN_EMAIL=your-admin@email.com
+   EMAIL_SERVICE_URL=https://fewtalks.com/api/send-login-notification.php
+   ADMIN_EMAIL=fewtalks007@gmail.com
    ```
 
 See `api/README.md` for detailed setup instructions.

@@ -28,18 +28,31 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 $input = json_decode(file_get_contents('php://input'), true);
 
+// Check if this is a contact form or login notification
+$isContactForm = !empty($input['data']['type']) && $input['data']['type'] === 'contact_form';
+
 // Validate required fields
-if (empty($input['data']['email']) || empty($input['data']['name'])) {
-    http_response_code(400);
-    echo json_encode(['success' => false, 'message' => 'Missing required fields: email and name']);
-    exit();
+if ($isContactForm) {
+    // Contact form validation
+    if (empty($input['data']['email']) || empty($input['data']['name']) || empty($input['data']['message'])) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => 'Missing required fields: email, name, and message']);
+        exit();
+    }
+} else {
+    // Login notification validation
+    if (empty($input['data']['email']) || empty($input['data']['name'])) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => 'Missing required fields: email and name']);
+        exit();
+    }
 }
 
 // Email Configuration - UPDATE THESE VALUES
 $smtp_host = 'smtp.gmail.com';
 $smtp_port = 587;
-$smtp_username = 'YOUR_GMAIL_HERE@gmail.com';  // Your Gmail address
-$smtp_password = 'YOUR_APP_PASSWORD_HERE';      // Your App Password (no spaces)
+$smtp_username = 'fewtalks007@gmail.com';  // Your Gmail address
+$smtp_password = 'cjfgdjxaqfyxiqow';     // Your App Password (no spaces) cjfg djxa qfyx iqow
 // Generate at: https://myaccount.google.com/apppasswords
 
 // Get recipient email (admin email if provided, otherwise user's email)
@@ -48,13 +61,14 @@ $toEmail = !empty($input['to']) ? $input['to'] : $input['data']['email'];
 // Sanitize data
 $userEmail = htmlspecialchars(trim($input['data']['email']), ENT_QUOTES, 'UTF-8');
 $userName = htmlspecialchars(trim($input['data']['name']), ENT_QUOTES, 'UTF-8');
+$userMessage = !empty($input['data']['message']) ? htmlspecialchars(trim($input['data']['message']), ENT_QUOTES, 'UTF-8') : '';
 $loginTime = !empty($input['data']['timestamp']) 
     ? date('Y-m-d H:i:s', strtotime($input['data']['timestamp']))
     : date('Y-m-d H:i:s');
 $deviceType = htmlspecialchars(trim($input['data']['device_type'] ?? 'Unknown'), ENT_QUOTES, 'UTF-8');
 $userAgent = htmlspecialchars(trim($input['data']['user_agent'] ?? 'Not available'), ENT_QUOTES, 'UTF-8');
 
-$subject = !empty($input['subject']) ? $input['subject'] : 'Fewtalks - Login Notification';
+$subject = !empty($input['subject']) ? $input['subject'] : ($isContactForm ? 'Fewtalks - Contact Form Submission' : 'Fewtalks - Login Notification');
 
 // Log submission
 $logFile = __DIR__ . '/login-notifications.json';
@@ -67,9 +81,14 @@ $logData = [
     'timestamp' => date('Y-m-d H:i:s'),
     'user_email' => $userEmail,
     'user_name' => $userName,
-    'device_type' => $deviceType,
+    'type' => $isContactForm ? 'contact_form' : 'login_notification',
     'notification_sent_to' => $toEmail
 ];
+if ($isContactForm) {
+    $logData['message'] = $userMessage;
+} else {
+    $logData['device_type'] = $deviceType;
+}
 $notifications[] = $logData;
 // Keep only last 100 notifications
 if (count($notifications) > 100) {
@@ -78,7 +97,129 @@ if (count($notifications) > 100) {
 file_put_contents($logFile, json_encode($notifications, JSON_PRETTY_PRINT));
 
 // Create email message
-$emailMessage = "
+if ($isContactForm) {
+    // Contact form email template
+    $emailMessage = "
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='UTF-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <style>
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; 
+            line-height: 1.6; 
+            color: #333; 
+            margin: 0; 
+            padding: 0; 
+            background-color: #f5f5f5;
+        }
+        .container { 
+            max-width: 600px; 
+            margin: 20px auto; 
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header { 
+            background: linear-gradient(135deg, #1DA1F2 0%, #0d8bd9 100%); 
+            color: white; 
+            padding: 30px 20px; 
+            text-align: center; 
+        }
+        .header h2 { 
+            margin: 0; 
+            font-size: 24px; 
+            font-weight: 600;
+        }
+        .content { 
+            padding: 30px 20px; 
+        }
+        .field { 
+            margin: 20px 0; 
+            padding: 15px; 
+            background: #f8fafc; 
+            border-left: 4px solid #1DA1F2; 
+            border-radius: 4px;
+        }
+        .label { 
+            font-weight: 600; 
+            color: #1DA1F2; 
+            margin-bottom: 8px; 
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .value { 
+            color: #333; 
+            font-size: 16px; 
+            margin-top: 5px;
+            white-space: pre-wrap;
+        }
+        .highlight { 
+            color: #1DA1F2; 
+            font-weight: 600; 
+        }
+        .footer { 
+            text-align: center; 
+            padding: 20px; 
+            color: #777; 
+            font-size: 12px; 
+            background: #f9f9f9;
+            border-top: 1px solid #eee;
+        }
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class='container'>
+        <div class='header'>
+            <h2>📧 Contact Form Submission</h2>
+            <p style='margin: 10px 0 0 0; opacity: 0.9;'>Fewtalks AI Content Suite</p>
+        </div>
+        <div class='content'>
+            <div class='info-box'>
+                <strong>New contact form submission</strong>
+            </div>
+            
+            <div class='field'>
+                <div class='label'>👤 Name</div>
+                <div class='value highlight'>$userName</div>
+            </div>
+            
+            <div class='field'>
+                <div class='label'>📧 Email</div>
+                <div class='value'>$userEmail</div>
+            </div>
+            
+            <div class='field'>
+                <div class='label'>💬 Message</div>
+                <div class='value'>$userMessage</div>
+            </div>
+            
+            <div class='field'>
+                <div class='label'>⏰ Submitted At</div>
+                <div class='value'>$loginTime</div>
+            </div>
+        </div>
+        <div class='footer'>
+            <p>This is an automated notification from Fewtalks</p>
+            <p>&copy; " . date('Y') . " Fewtalks. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>
+";
+} else {
+    // Login notification email template
+    $emailMessage = "
 <!DOCTYPE html>
 <html>
 <head>
@@ -200,6 +341,7 @@ $emailMessage = "
 </body>
 </html>
 ";
+}
 
 // Function to send email via SMTP socket
 function sendEmailViaSMTP($to, $subject, $message, $from, $smtp_host, $smtp_port, $smtp_user, $smtp_pass, $replyTo = null) {

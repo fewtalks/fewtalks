@@ -12,7 +12,7 @@ interface HeaderProps {
 }
 
 const Header: React.FC<HeaderProps> = ({ setView }) => {
-  const { user, loading, openLoginModal, signOut: authSignOut } = useAuth();
+  const { user, loading, openLoginModal, openContactModal, signOut: authSignOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -107,6 +107,13 @@ const Header: React.FC<HeaderProps> = ({ setView }) => {
                 {theme === 'light' ? <MoonIcon /> : <SunIcon />}
             </button>
             {renderAuthControls()}
+            <button
+                onClick={openContactModal}
+                className="flex items-center gap-2 text-slate-700 dark:text-slate-300 font-medium px-2 sm:px-4 py-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors touch-manipulation min-h-[44px] text-xs sm:text-sm"
+            >
+                <span className="hidden xs:inline">Contact Us</span>
+                <span className="xs:hidden">Contact</span>
+            </button>
         </div>
       </nav>
     </header>

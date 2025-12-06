@@ -58,6 +58,115 @@ const isIOS = (): boolean => {
          (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 };
 
+// Store the sign-in promise resolvers so button clicks can trigger sign-in
+let signInResolve: ((user: User) => void) | null = null;
+let signInReject: ((error: Error) => void) | null = null;
+
+// Process Google credential and create user
+const processGoogleCredential = (credential: string): User => {
+  // Decode the JWT token to get user info
+  const parts = credential.split('.');
+  if (parts.length !== 3) {
+    throw new Error('Invalid JWT token format');
+  }
+
+  // Decode the payload (second part of JWT)
+  const payload = JSON.parse(atob(parts[1]));
+  
+  // Validate required fields
+  if (!payload.email) {
+    throw new Error('Email not found in token');
+  }
+  
+  // Check for existing user data to persist pro status
+  let existingUser = getCurrentUser();
+  const isPro = existingUser?.isPro || false;
+  
+  const user: User = {
+    name: payload.name || payload.given_name || 'User',
+    email: payload.email,
+    avatarUrl: payload.picture || `https://api.dicebear.com/8.x/avataaars/svg?seed=${payload.email}`,
+    isPro: isPro,
+  };
+  
+  localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+  return user;
+};
+
+// Initialize Google Identity Services
+export const initializeGoogleSignIn = (): void => {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  
+  if (!clientId || !window.google?.accounts?.id || isGoogleInitialized) {
+    return;
+  }
+
+  try {
+    window.google.accounts.id.initialize({
+      client_id: clientId,
+      use_fedcm_for_prompt: false, // Disable FedCM due to CORS issues and iOS compatibility
+      callback: (response: { credential: string }) => {
+        if (!response || !response.credential) {
+          if (signInReject) {
+            signInReject(new Error('No credential received from Google'));
+            signInResolve = null;
+            signInReject = null;
+          }
+          // Dispatch error event
+          window.dispatchEvent(new CustomEvent('googleSignInError', { 
+            detail: { error: 'No credential received from Google' } 
+          }));
+          return;
+        }
+
+        try {
+          const user = processGoogleCredential(response.credential);
+          if (signInResolve) {
+            signInResolve(user);
+            signInResolve = null;
+            signInReject = null;
+          }
+          // Dispatch success event for button-based flows
+          window.dispatchEvent(new CustomEvent('googleSignInSuccess', { detail: { user } }));
+        } catch (error: any) {
+          console.error('Error processing Google sign-in:', error);
+          if (signInReject) {
+            signInReject(new Error(`Failed to process sign-in: ${error.message || 'Unknown error'}`));
+            signInResolve = null;
+            signInReject = null;
+          }
+          // Dispatch error event
+          window.dispatchEvent(new CustomEvent('googleSignInError', { 
+            detail: { error: error.message || 'Unknown error' } 
+          }));
+        }
+      },
+      error_callback: (error: any) => {
+        console.error('Google sign-in error callback:', error);
+        const errorMessage = error?.message || error?.type || 'Google sign-in failed';
+        if (signInReject) {
+          // Provide more helpful error messages for iOS
+          if (isIOS() && errorMessage.includes('popup')) {
+            signInReject(new Error('Please allow popups in your browser settings and try again.'));
+          } else {
+            signInReject(new Error(errorMessage));
+          }
+          signInResolve = null;
+          signInReject = null;
+        }
+        // Dispatch error event
+        window.dispatchEvent(new CustomEvent('googleSignInError', { 
+          detail: { error: errorMessage } 
+        }));
+      },
+    });
+    
+    isGoogleInitialized = true;
+  } catch (error: any) {
+    console.error('Failed to initialize Google Identity Services:', error);
+  }
+};
+
 // Real Google Sign-In using Google Identity Services
 export const signInWithGoogle = (): Promise<User> => {
   return new Promise((resolve, reject) => {
@@ -68,85 +177,39 @@ export const signInWithGoogle = (): Promise<User> => {
       return;
     }
 
+    // Check if user is already signed in (from rendered button click)
+    const existingUser = getCurrentUser();
+    if (existingUser) {
+      // User is already signed in, resolve immediately
+      resolve(existingUser);
+      return;
+    }
+
     // Set a timeout to reject if sign-in takes too long
     const timeout = setTimeout(() => {
-      reject(new Error('Sign-in timed out. Please try again.'));
+      if (signInResolve === resolve) {
+        signInResolve = null;
+        signInReject = null;
+        reject(new Error('Sign-in timed out. Please try again.'));
+      }
     }, 60000); // 60 seconds timeout
+
+    // Store resolvers
+    signInResolve = (user: User) => {
+      clearTimeout(timeout);
+      resolve(user);
+    };
+    signInReject = (error: Error) => {
+      clearTimeout(timeout);
+      reject(error);
+    };
 
     // Wait for Google Identity Services to load
     const checkGoogle = () => {
       if (window.google?.accounts?.id) {
-        // Initialize Google Identity Services only once
+        // Initialize Google Identity Services if not already initialized
         if (!isGoogleInitialized) {
-          try {
-            // For iOS, use a more compatible configuration
-            const iosDevice = isIOS();
-            
-            window.google.accounts.id.initialize({
-              client_id: clientId,
-              use_fedcm_for_prompt: false, // Disable FedCM due to CORS issues and iOS compatibility
-              callback: async (response: { credential: string }) => {
-                clearTimeout(timeout);
-                
-                if (!response || !response.credential) {
-                  reject(new Error('No credential received from Google'));
-                  return;
-                }
-
-                try {
-                  // Decode the JWT token to get user info
-                  const parts = response.credential.split('.');
-                  if (parts.length !== 3) {
-                    throw new Error('Invalid JWT token format');
-                  }
-
-                  // Decode the payload (second part of JWT)
-                  const payload = JSON.parse(atob(parts[1]));
-                  
-                  // Validate required fields
-                  if (!payload.email) {
-                    throw new Error('Email not found in token');
-                  }
-                  
-                  // Check for existing user data to persist pro status
-                  let existingUser = getCurrentUser();
-                  const isPro = existingUser?.isPro || false;
-                  
-                  const user: User = {
-                    name: payload.name || payload.given_name || 'User',
-                    email: payload.email,
-                    avatarUrl: payload.picture || `https://api.dicebear.com/8.x/avataaars/svg?seed=${payload.email}`,
-                    isPro: isPro,
-                  };
-                  
-                  localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
-                  resolve(user);
-                } catch (error: any) {
-                  console.error('Error processing Google sign-in:', error);
-                  console.error('Response credential:', response.credential?.substring(0, 50) + '...');
-                  reject(new Error(`Failed to process sign-in: ${error.message || 'Unknown error'}`));
-                }
-              },
-              error_callback: (error: any) => {
-                clearTimeout(timeout);
-                console.error('Google sign-in error callback:', error);
-                const errorMessage = error?.message || error?.type || 'Google sign-in failed';
-                // Provide more helpful error messages for iOS
-                if (isIOS() && errorMessage.includes('popup')) {
-                  reject(new Error('Please allow popups in your browser settings and try again.'));
-                } else {
-                  reject(new Error(errorMessage));
-                }
-              },
-            });
-            
-            isGoogleInitialized = true;
-          } catch (error: any) {
-            clearTimeout(timeout);
-            console.error('Failed to initialize Google Identity Services:', error);
-            reject(new Error(`Failed to initialize Google sign-in: ${error.message || 'Unknown error'}`));
-            return;
-          }
+          initializeGoogleSignIn();
         }
         
         // For iOS devices, skip One Tap and rely on button click
@@ -195,6 +258,8 @@ export const signInWithGoogle = (): Promise<User> => {
             setTimeout(retryCheck, 100);
           } else {
             clearTimeout(timeout);
+            signInResolve = null;
+            signInReject = null;
             reject(new Error('Google Identity Services failed to load. Please refresh the page.'));
           }
         };

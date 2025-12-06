@@ -6,6 +6,7 @@ import ToolSelector from './components/ToolSelector';
 import { AuthProvider } from './contexts/AuthContext';
 import Header from './components/Header';
 import LoginModal from './components/LoginModal';
+import ContactModal from './components/ContactModal';
 import ProfilePage from './components/ProfilePage';
 import { useAuth } from './hooks/useAuth';
 import * as historyService from './services/historyService';
@@ -54,7 +55,7 @@ const Footer: React.FC = () => (
 );
 
 const AppContent: React.FC = () => {
-  const { user } = useAuth();
+  const { user, isContactModalOpen, closeContactModal } = useAuth();
   const [activeTool, setActiveTool] = useState<Tool>('Tweets');
   const [view, setView] = useState<View>('main');
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -127,6 +128,7 @@ const AppContent: React.FC = () => {
       </main>
       <Footer />
       <LoginModal />
+      <ContactModal isOpen={isContactModalOpen} onClose={closeContactModal} />
       <UpgradeModal />
     </div>
   );
